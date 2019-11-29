@@ -1,0 +1,5 @@
+service wifimacaddr /vendor/bin/wifimacaddr
+    user root
+    group system
+    class late_start
+    oneshot

@@ -1,0 +1,64 @@
+on post-fs
+	write /proc/bootprof "tkcore: prepare system ta path"
+	chown system system /vendor/app/t6
+
+	write /proc/bootprof "tkcore: prepare protect_f sfs"
+	restorecon /vendor/protect_f
+	mkdir /vendor/protect_f/tee
+	chown system system /vendor/protect_f/tee
+	restorecon /vendor/protect_f/tee
+	start teed
+
+on property:trustkernel.fs.state=prepare
+
+	write /proc/bootprof "tkcore: prepare sfs"
+	mkdir /data/tee
+	chown system system /data/tee
+	restorecon /data/tee/
+
+	write /proc/bootprof "tkcore: prepare service provider ta path"
+	mkdir /data/vendor/t6
+	chown system system /data/tee/t6
+	restorecon /data/tee/t6
+    start move_fota_data
+
+# For non-encrypted case
+on property:ro.crypto.state=unencrypted
+	setprop trustkernel.fs.mode 1
+	setprop trustkernel.fs.state prepare
+
+# For FDE/encrypted successfully
+on property:vold.decrypt=trigger_restart_framework
+	setprop trustkernel.fs.mode 2
+	setprop trustkernel.fs.state prepare
+
+# For FBE/encrypted successfully
+on property:ro.crypto.type=file && property:ro.crypto.state=encrypted
+	setprop trustkernel.fs.mode 3
+	setprop trustkernel.fs.state prepare
+
+on property:trustkernel.log.state=ready
+	write /proc/bootprof "tkcore: prepare log file"
+	restorecon /data/tee/tkcore.log
+	setprop trustkernel.log.state enable
+
+service move_fota_data /vendor/bin/move_fota_data \
+            --prot /vendor/protect_f/tee \
+            --datapath /data/tee/
+    class core
+    user system
+    group system
+    disabled
+    oneshot
+
+service teed /vendor/bin/teed \
+    --datapath /data/tee/ \
+    --sptapath /data/tee/t6 \
+    --systapath /vendor/app/t6 \
+    --prot /vendor/protect_f/tee \
+    --logpath /data/tee/tkcore.log \
+    --proprefix trustkernel \
+    --sdrpmbdev /dev/block/platform/mtk-msdc.0/11120000.msdc0/by-name/sdrpmb
+	user system
+	group system
+	class core
